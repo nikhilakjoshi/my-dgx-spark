@@ -17,6 +17,7 @@ cp .env.example .env
 # edit .env, set SPARK_URL=http://192.168.1.175:8000/transcribe (or localhost path if tunneling, see below)
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+chmod +x dictate.sh   # usually preserved by git, but in case
 ```
 
 ## 2. macOS permissions (per-app, per-machine)
@@ -90,7 +91,7 @@ SPARK_URL=http://localhost:8000/transcribe
 
 The ZCC view: only an SSH session to a private IP. Inside the tunnel: HTTP to the Spark.
 
-## 5. Verify
+## 5. Verify and run
 
 ```bash
 # direct or via tunnel, either way:
@@ -98,7 +99,19 @@ curl -s http://${SPARK_HOST:-192.168.1.175}:8000/transcribe -X POST -F file=@/de
 # expect HTTP 4xx (no audio is invalid input) — confirms reachability
 ```
 
-Run `python dictate.py`. Hold Option + Ctrl, say something. Text types at cursor.
+Start the dictation client in the background:
+
+```bash
+./dictate.sh start      # backgrounds the python process; survives terminal close
+./dictate.sh status     # is it running?
+./dictate.sh logs       # tail ~/Library/Logs/whisper-dictate.log
+./dictate.sh stop       # kill it
+./dictate.sh restart
+```
+
+Hold **Option + Ctrl**, say something, release. Text types at the cursor.
+
+The wrapper uses `nohup ... &`. macOS keeps TCC permissions attributed to the launching terminal app even after the terminal closes, so the granted Accessibility/Input Monitoring permissions keep working — no need to grant Python directly.
 
 ## Open issues / TODO
 
