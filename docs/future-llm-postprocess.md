@@ -2,6 +2,8 @@
 
 Idea parked for later. Add an optional LLM step after whisper so dictation can output markdown (for prompting AI tools) or stay plain (for chat). Toggle at speaking time.
 
+> For the narrower problem of "whisper misspells domain terms," see [`future-prompt-biasing.md`](future-prompt-biasing.md) — much cheaper, no second model. Composable with this doc's approach if both are eventually built.
+
 ## Why an LLM is needed
 
 Whisper transcribes literally. Saying "bullet one foo bullet two bar" writes exactly that. whisper.cpp's `--prompt` biases vocabulary, not formatting — useless for real markdown structure. Need an instruction-tuned LLM to reformat.
