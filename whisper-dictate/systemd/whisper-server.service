@@ -1,0 +1,16 @@
+[Unit]
+Description=whisper.cpp dictation server (Spark)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/whisper-dictate
+ExecStart=%h/Projects/whisper-dictate/run-server.sh
+Restart=on-failure
+RestartSec=3
+# whisper.cpp links against CUDA 13 system libs
+Environment=PATH=/usr/local/cuda-13.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=default.target
