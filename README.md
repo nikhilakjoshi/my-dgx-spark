@@ -38,3 +38,4 @@ Components:
 
 - [`docs/future-prompt-biasing.md`](docs/future-prompt-biasing.md) — fix domain-term misspellings (Whisper, DGX Spark, etc.) via whisper.cpp's per-request `prompt` field. No second model. Cheapest win.
 - [`docs/future-llm-postprocess.md`](docs/future-llm-postprocess.md) — LLM-formatted dictation (markdown mode, cleanup, polish) with a second hotkey. Heavier.
+- [`docs/future-remote-access.md`](docs/future-remote-access.md) — off-WiFi dictation via Tailscale (primary) or Cloudflare Tunnel; plus multi-user auth/logging if I ever share my Spark.
