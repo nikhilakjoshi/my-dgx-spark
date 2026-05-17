@@ -15,3 +15,6 @@ whisper-dictate/whisper.cpp/
 
 # logs
 *.log
+
+# runtime state
+.dictate.pid
