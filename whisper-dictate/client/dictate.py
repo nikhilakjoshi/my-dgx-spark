@@ -3,6 +3,7 @@ import io
 import os
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -60,6 +61,7 @@ def _start():
 
 
 def _stop_and_send():
+    """Run on the listener thread. Must return fast — heavy work dispatched to a worker."""
     global is_recording, stream
     if not is_recording:
         return
@@ -70,8 +72,12 @@ def _stop_and_send():
         stream = None
     if not audio_buf:
         return
+    chunks = list(audio_buf)
+    threading.Thread(target=_transcribe_and_type, args=(chunks,), daemon=True).start()
 
-    audio_np = np.concatenate(audio_buf, axis=0)
+
+def _transcribe_and_type(chunks: list[np.ndarray]):
+    audio_np = np.concatenate(chunks, axis=0)
     buf = io.BytesIO()
     sf.write(buf, audio_np, SAMPLE_RATE, format="WAV")
     buf.seek(0)
@@ -89,7 +95,7 @@ def _stop_and_send():
     text = _clean(text)
     print(f"{dt:.2f}s: {text!r}")
     if text:
-        kb.type(text)
+        kb.type(text + " ")
 
 
 def _combo_active() -> bool:
