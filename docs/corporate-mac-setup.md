@@ -16,9 +16,16 @@ cd my-dgx-spark/whisper-dictate/client
 cp .env.example .env
 # edit .env, set SPARK_URL=http://192.168.1.175:8000/transcribe (or localhost path if tunneling, see below)
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+
+# Corporate Zscaler / proxy often blocks pypi. Use the committed offline wheel bundle:
+tar xzf wheels.tar.gz
+pip install --no-index --find-links=wheels -r requirements.txt
+# (If pypi works on this Mac, plain `pip install -r requirements.txt` is fine too.)
+
 chmod +x dictate.sh   # usually preserved by git, but in case
 ```
+
+The wheel bundle is built for macOS arm64 / Python 3.13. If the corp Mac has a different Python or arch, see `docs/wheel-bundle.md` to rebuild.
 
 ## 2. macOS permissions (per-app, per-machine)
 
