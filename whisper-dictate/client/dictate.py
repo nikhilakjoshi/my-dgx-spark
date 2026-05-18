@@ -1,4 +1,5 @@
 """Push-to-talk dictation client. Hold Option + Ctrl, speak, release to insert."""
+import collections
 import io
 import os
 import re
@@ -38,6 +39,35 @@ if not SPARK_URL:
     )
 
 SAMPLE_RATE = 16000
+
+GLOSSARY_FILE = HERE / "glossary.txt"
+RECENT_MAXLEN = 8
+PROMPT_BUDGET_CHARS = 500  # whisper's prompt window is small; stay well under
+
+
+def _load_glossary() -> str:
+    if not GLOSSARY_FILE.exists():
+        return ""
+    lines = []
+    for line in GLOSSARY_FILE.read_text().splitlines():
+        s = line.strip()
+        if s and not s.startswith("#"):
+            lines.append(s)
+    return " ".join(lines)
+
+
+GLOSSARY = _load_glossary()
+recent: collections.deque[str] = collections.deque(maxlen=RECENT_MAXLEN)
+
+
+def _build_prompt() -> str:
+    parts = [GLOSSARY] if GLOSSARY else []
+    if recent:
+        parts.append(" ".join(recent))
+    prompt = " ".join(parts).strip()
+    if len(prompt) > PROMPT_BUDGET_CHARS:
+        prompt = prompt[-PROMPT_BUDGET_CHARS:]  # keep most-recent context, drop old
+    return prompt
 
 # Hold Option + Control (either side) to record.
 MOD_ALT = {keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr}
@@ -99,9 +129,14 @@ def _finalize_and_send(s, chunks: list[np.ndarray]):
     sf.write(buf, audio_np, SAMPLE_RATE, format="WAV")
     buf.seek(0)
 
+    prompt = _build_prompt()
+    files = {"file": ("audio.wav", buf, "audio/wav")}
+    if prompt:
+        files["prompt"] = (None, prompt)
+
     t0 = time.perf_counter()
     try:
-        r = requests.post(SPARK_URL, files={"file": ("audio.wav", buf, "audio/wav")}, timeout=30)
+        r = requests.post(SPARK_URL, files=files, timeout=30)
         r.raise_for_status()
         text = r.json().get("text", "")
     except Exception as e:
@@ -112,6 +147,7 @@ def _finalize_and_send(s, chunks: list[np.ndarray]):
     text = _clean(text)
     print(f"{dt:.2f}s: {text!r}")
     if text:
+        recent.append(text)
         kb.type(text + " ")
 
 

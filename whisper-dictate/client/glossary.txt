@@ -1,0 +1,7 @@
+# Words/names whisper commonly mishears. One topic per line, free form.
+# Used as the prefix of every whisper prompt. Keep terse — total prompt budget is small.
+Names and tools: Claude, Anthropic, OpenAI, GPT, Cursor, GitHub Copilot, Ollama, Tailscale, Cloudflare, Zscaler.
+Stack: whisper.cpp, faster-whisper, CTranslate2, CUDA, Blackwell, DGX Spark, FastAPI, Caddy, systemd, pynput, sounddevice, soundfile.
+Models: Llama, Qwen, Mistral, Phi, Gemma.
+Languages and tools: Python, TypeScript, Rust, Go, Kubernetes, Docker, Postgres, Redis, Pydantic, uvicorn.
+People: Nikhil.
