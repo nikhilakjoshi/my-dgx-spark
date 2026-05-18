@@ -15,7 +15,20 @@ from dotenv import load_dotenv
 from pynput import keyboard
 from pynput.keyboard import Controller
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+HERE = Path(__file__).resolve().parent
+load_dotenv(HERE / ".env")
+
+HEARTBEAT_FILE = HERE / ".dictate.heartbeat"
+HEARTBEAT_INTERVAL = 15  # seconds
+
+
+def _heartbeat_loop():
+    while True:
+        try:
+            HEARTBEAT_FILE.touch()
+        except Exception:
+            pass
+        time.sleep(HEARTBEAT_INTERVAL)
 
 SPARK_URL = os.environ.get("SPARK_URL")
 if not SPARK_URL:
@@ -117,5 +130,7 @@ def on_release(key):
 if __name__ == "__main__":
     print(f"dictation client -> {SPARK_URL}")
     print("hold Option + Control to dictate")
+    HEARTBEAT_FILE.touch()
+    threading.Thread(target=_heartbeat_loop, daemon=True).start()
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()

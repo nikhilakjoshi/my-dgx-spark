@@ -18,6 +18,7 @@ whisper-dictate/whisper.cpp/
 
 # runtime state
 .dictate.pid
+.dictate.heartbeat
 
 # offline wheel bundles: tarball is committed (see whisper-dictate/client/wheels.tar.gz),
 # the extracted directory is not

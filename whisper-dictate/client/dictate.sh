@@ -10,6 +10,8 @@ VENV="$HERE/.venv"
 LOG_DIR="$HOME/Library/Logs"
 LOG="$LOG_DIR/whisper-dictate.log"
 PIDFILE="$HERE/.dictate.pid"
+HEARTBEAT="$HERE/.dictate.heartbeat"
+HEARTBEAT_STALE_SECONDS=45  # 3x interval in dictate.py
 
 cmd="${1:-status}"
 
@@ -37,11 +39,11 @@ case "$cmd" in
     if _running; then
       pid="$(cat "$PIDFILE")"
       kill "$pid"
-      rm -f "$PIDFILE"
+      rm -f "$PIDFILE" "$HEARTBEAT"
       echo "stopped pid $pid"
     else
       echo "not running"
-      rm -f "$PIDFILE"
+      rm -f "$PIDFILE" "$HEARTBEAT"
     fi
     ;;
   restart)
@@ -50,11 +52,24 @@ case "$cmd" in
     "$0" start
     ;;
   status)
-    if _running; then
-      echo "running, pid $(cat "$PIDFILE")"
-    else
+    if ! _running; then
       echo "stopped"
+      exit 0
     fi
+    pid="$(cat "$PIDFILE")"
+    if [[ ! -f "$HEARTBEAT" ]]; then
+      echo "running pid $pid, no heartbeat yet (just started — wait a few seconds)"
+      exit 0
+    fi
+    now=$(date +%s)
+    beat=$(stat -f %m "$HEARTBEAT")
+    age=$((now - beat))
+    if (( age > HEARTBEAT_STALE_SECONDS )); then
+      echo "running pid $pid, BUT heartbeat is ${age}s old (likely stalled after sleep/wake)."
+      echo "suggest: $(basename "$0") restart"
+      exit 1
+    fi
+    echo "running pid $pid, healthy (heartbeat ${age}s ago)"
     ;;
   logs)
     tail -f "$LOG"
