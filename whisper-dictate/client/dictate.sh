@@ -29,7 +29,7 @@ case "$cmd" in
     cd "$HERE"
     # shellcheck disable=SC1091
     source "$VENV/bin/activate"
-    nohup python dictate.py >> "$LOG" 2>&1 &
+    PYTHONUNBUFFERED=1 nohup python dictate.py >> "$LOG" 2>&1 &
     echo $! > "$PIDFILE"
     disown || true
     echo "started, pid $(cat "$PIDFILE")"

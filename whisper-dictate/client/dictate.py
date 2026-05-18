@@ -1,4 +1,5 @@
 """Push-to-talk dictation client. Hold Option + Ctrl, speak, release to insert."""
+import ast
 import collections
 import io
 import os
@@ -58,6 +59,33 @@ def _load_glossary() -> str:
 
 GLOSSARY = _load_glossary()
 recent: collections.deque[str] = collections.deque(maxlen=RECENT_MAXLEN)
+
+LOG_FILE = Path.home() / "Library" / "Logs" / "whisper-dictate.log"
+LOG_LINE_RE = re.compile(r"^\d+\.\d+s: (.+)$")
+
+
+def _seed_recent_from_log() -> int:
+    """Populate `recent` from the most recent successful transcripts in the log."""
+    if not LOG_FILE.exists():
+        return 0
+    try:
+        lines = LOG_FILE.read_text(errors="ignore").splitlines()
+    except Exception:
+        return 0
+    texts: list[str] = []
+    for line in lines:
+        m = LOG_LINE_RE.match(line)
+        if not m:
+            continue
+        try:
+            t = ast.literal_eval(m.group(1))
+        except (ValueError, SyntaxError):
+            continue
+        if isinstance(t, str) and t.strip():
+            texts.append(t)
+    for t in texts[-RECENT_MAXLEN:]:
+        recent.append(t)
+    return len(recent)
 
 
 def _build_prompt() -> str:
@@ -170,6 +198,8 @@ def on_release(key):
 if __name__ == "__main__":
     print(f"dictation client -> {SPARK_URL}")
     print("hold Option + Control to dictate")
+    seeded = _seed_recent_from_log()
+    print(f"seeded {seeded} recent transcript(s) from log")
     HEARTBEAT_FILE.touch()
     threading.Thread(target=_heartbeat_loop, daemon=True).start()
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
