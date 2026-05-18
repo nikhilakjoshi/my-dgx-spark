@@ -74,22 +74,26 @@ def _start():
 
 
 def _stop_and_send():
-    """Run on the listener thread. Must return fast — heavy work dispatched to a worker."""
+    """Run on the listener thread. Must return fast — everything heavy goes to a worker."""
     global is_recording, stream
     if not is_recording:
         return
     is_recording = False
-    if stream is not None:
-        stream.stop()
-        stream.close()
-        stream = None
-    if not audio_buf:
-        return
+    s = stream
+    stream = None
     chunks = list(audio_buf)
-    threading.Thread(target=_transcribe_and_type, args=(chunks,), daemon=True).start()
+    threading.Thread(target=_finalize_and_send, args=(s, chunks), daemon=True).start()
 
 
-def _transcribe_and_type(chunks: list[np.ndarray]):
+def _finalize_and_send(s, chunks: list[np.ndarray]):
+    if s is not None:
+        try:
+            s.stop()
+            s.close()
+        except Exception as e:
+            print(f"stream teardown err: {e}")
+    if not chunks:
+        return
     audio_np = np.concatenate(chunks, axis=0)
     buf = io.BytesIO()
     sf.write(buf, audio_np, SAMPLE_RATE, format="WAV")
