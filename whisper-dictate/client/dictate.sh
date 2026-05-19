@@ -74,8 +74,25 @@ case "$cmd" in
   logs)
     tail -f "$LOG"
     ;;
+  clear-log)
+    was_running=0
+    if _running; then
+      was_running=1
+      "$0" stop
+    fi
+    if [[ -f "$LOG" ]]; then
+      bak="$LOG.bak.$(date +%Y%m%d-%H%M%S)"
+      mv "$LOG" "$bak"
+      echo "archived: $bak"
+    else
+      echo "no log to clear"
+    fi
+    if (( was_running )); then
+      "$0" start
+    fi
+    ;;
   *)
-    echo "usage: $(basename "$0") {start|stop|restart|status|logs}" >&2
+    echo "usage: $(basename "$0") {start|stop|restart|status|logs|clear-log}" >&2
     exit 2
     ;;
 esac
