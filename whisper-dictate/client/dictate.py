@@ -43,7 +43,9 @@ SAMPLE_RATE = 16000
 
 GLOSSARY_FILE = HERE / "glossary.txt"
 RECENT_MAXLEN = 8
-PROMPT_BUDGET_CHARS = 500  # whisper's prompt window is small; stay well under
+# whisper.cpp accepts ~224 tokens of prompt (roughly 900 chars). Stay under that
+# but use most of the budget. Glossary is always preserved; only recent gets trimmed.
+PROMPT_BUDGET_CHARS = 800
 
 
 def _load_glossary() -> str:
@@ -89,13 +91,17 @@ def _seed_recent_from_log() -> int:
 
 
 def _build_prompt() -> str:
-    parts = [GLOSSARY] if GLOSSARY else []
-    if recent:
-        parts.append(" ".join(recent))
-    prompt = " ".join(parts).strip()
-    if len(prompt) > PROMPT_BUDGET_CHARS:
-        prompt = prompt[-PROMPT_BUDGET_CHARS:]  # keep most-recent context, drop old
-    return prompt
+    """Always preserve glossary; trim recent transcripts from the front to fit budget."""
+    glossary = GLOSSARY[:PROMPT_BUDGET_CHARS]
+    if not recent:
+        return glossary
+    remaining = PROMPT_BUDGET_CHARS - len(glossary) - 1
+    if remaining <= 0:
+        return glossary
+    recent_text = " ".join(recent)
+    if len(recent_text) > remaining:
+        recent_text = recent_text[-remaining:]  # keep most recent
+    return f"{glossary} {recent_text}".strip() if glossary else recent_text
 
 # Hold Option + Control (either side) to record.
 MOD_ALT = {keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr}
