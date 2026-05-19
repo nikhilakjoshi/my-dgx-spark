@@ -39,6 +39,10 @@ if not SPARK_URL:
         "to your DGX Spark address (e.g. http://192.168.x.x:8000/transcribe)."
     )
 
+# Optional LLM correction step (Ollama). If CORRECTION_URL is unset, this step is skipped.
+CORRECTION_URL = os.environ.get("CORRECTION_URL")  # e.g. http://192.168.1.175:11434/api/generate
+CORRECTION_MODEL = os.environ.get("CORRECTION_MODEL", "qwen2.5:0.5b")
+
 SAMPLE_RATE = 16000
 
 GLOSSARY_FILE = HERE / "glossary.txt"
@@ -88,6 +92,42 @@ def _seed_recent_from_log() -> int:
     for t in texts[-RECENT_MAXLEN:]:
         recent.append(t)
     return len(recent)
+
+
+CORRECTION_SYSTEM = (
+    "You correct speech-to-text transcription mistakes. "
+    "Given a raw transcript, output ONLY the corrected text — no quotes, prefix, or commentary. "
+    "Keep meaning exactly the same. Do not paraphrase. "
+    "Only fix obvious mistakes using the domain context below.\n\n"
+    f"Domain context: {GLOSSARY}"
+)
+
+
+def _correct(text: str) -> str:
+    """Optional LLM post-correction. Returns text unchanged if Ollama is unreachable or disabled."""
+    if not CORRECTION_URL or not text:
+        return text
+    try:
+        r = requests.post(
+            CORRECTION_URL,
+            json={
+                "model": CORRECTION_MODEL,
+                "system": CORRECTION_SYSTEM,
+                "prompt": text,
+                "stream": False,
+                "options": {"temperature": 0, "num_predict": 256},
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        out = r.json().get("response", "").strip()
+        # strip surrounding quotes if the model wrapped output despite instructions
+        if len(out) >= 2 and out[0] in "\"'" and out[-1] == out[0]:
+            out = out[1:-1].strip()
+        return out or text
+    except Exception as e:
+        print(f"correction err: {e}")
+        return text
 
 
 def _build_prompt() -> str:
@@ -177,12 +217,21 @@ def _finalize_and_send(s, chunks: list[np.ndarray]):
         print(f"err: {e}")
         return
 
-    dt = time.perf_counter() - t0
+    dt_whisper = time.perf_counter() - t0
     text = _clean(text)
-    print(f"{dt:.2f}s: {text!r}")
-    if text:
-        recent.append(text)
-        kb.type(text + " ")
+
+    t1 = time.perf_counter()
+    corrected = _correct(text)
+    dt_correct = time.perf_counter() - t1
+
+    if corrected != text:
+        print(f"{dt_whisper:.2f}s whisper, {dt_correct:.2f}s correct: {text!r} -> {corrected!r}")
+    else:
+        print(f"{dt_whisper:.2f}s: {corrected!r}")
+
+    if corrected:
+        recent.append(corrected)
+        kb.type(corrected + " ")
 
 
 def _combo_active() -> bool:
