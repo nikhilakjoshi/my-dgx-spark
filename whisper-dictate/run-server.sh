@@ -9,4 +9,7 @@ exec ./build/bin/whisper-server \
   --inference-path /transcribe \
   -l en \
   -t 16 \
-  -nt
+  -nt \
+  --suppress-nst \
+  --vad \
+  --vad-model models/ggml-silero-v5.1.2.bin
