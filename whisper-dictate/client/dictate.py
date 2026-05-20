@@ -125,6 +125,12 @@ is_recording = False
 stream: sd.InputStream | None = None
 held: set = set()
 
+# Safety net for stuck mic: if recording exceeds this many seconds without
+# a release event (pynput sometimes drops modifier releases on macOS),
+# force-stop and recover state.
+MAX_RECORD_SECONDS = float(os.environ.get("MAX_RECORD_SECONDS", "60"))
+_max_record_timer: threading.Timer | None = None
+
 
 _WS = re.compile(r"\s+")
 
@@ -139,22 +145,39 @@ def _on_audio(indata, frames, t, status):
 
 
 def _start():
-    global is_recording, audio_buf, stream
+    global is_recording, audio_buf, stream, _max_record_timer
     if is_recording:
         return
     audio_buf = []
     is_recording = True
     stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, callback=_on_audio)
     stream.start()
+    _max_record_timer = threading.Timer(MAX_RECORD_SECONDS, _force_stop)
+    _max_record_timer.daemon = True
+    _max_record_timer.start()
     print("rec...", flush=True)
+
+
+def _force_stop():
+    """Safety net: pynput sometimes loses modifier-release events on macOS,
+    which leaves the mic stuck on. After MAX_RECORD_SECONDS, force-stop and
+    clear the held-modifier cache so the next combo press works."""
+    if not is_recording:
+        return
+    print(f"max record duration ({MAX_RECORD_SECONDS}s) reached; force-stopping", flush=True)
+    held.clear()
+    _stop_and_send()
 
 
 def _stop_and_send():
     """Run on the listener thread. Must return fast — everything heavy goes to a worker."""
-    global is_recording, stream
+    global is_recording, stream, _max_record_timer
     if not is_recording:
         return
     is_recording = False
+    if _max_record_timer is not None:
+        _max_record_timer.cancel()
+        _max_record_timer = None
     s = stream
     stream = None
     chunks = list(audio_buf)
