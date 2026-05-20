@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import Quartz
 import requests
 import sounddevice as sd
 import soundfile as sf
@@ -131,12 +132,56 @@ held: set = set()
 MAX_RECORD_SECONDS = float(os.environ.get("MAX_RECORD_SECONDS", "60"))
 _max_record_timer: threading.Timer | None = None
 
+# Quartz watchdog: pynput occasionally loses modifier-release events on macOS.
+# We poll the OS directly via CGEventSourceFlagsState every QUARTZ_POLL_INTERVAL
+# seconds and force-stop if the modifier combo is no longer actually held.
+# Whichever detects the release first (pynput or this) wins the race.
+QUARTZ_POLL_INTERVAL = 0.2
+_MOD_ALT_MASK = Quartz.kCGEventFlagMaskAlternate
+_MOD_CTRL_MASK = Quartz.kCGEventFlagMaskControl
+
+
+def _modifiers_actually_held() -> bool:
+    flags = Quartz.CGEventSourceFlagsState(Quartz.kCGEventSourceStateCombinedSessionState)
+    return bool(flags & _MOD_ALT_MASK) and bool(flags & _MOD_CTRL_MASK)
+
+
+def _quartz_watchdog():
+    while True:
+        time.sleep(QUARTZ_POLL_INTERVAL)
+        if is_recording and not _modifiers_actually_held():
+            print("quartz: combo released; stopping", flush=True)
+            held.clear()
+            _stop_and_send()
+
 
 _WS = re.compile(r"\s+")
+# Strip leading hallucinated speaker labels like "Striper:" or "Speaker:" at the very start.
+_SPEAKER_LABEL = re.compile(r"^[A-Z][a-zA-Z]+:\s+")
 
 
 def _clean(text: str) -> str:
-    return _WS.sub(" ", text).strip()
+    text = _WS.sub(" ", text).strip()
+    text = _SPEAKER_LABEL.sub("", text)
+    return text
+
+
+def _first_word(text: str) -> str:
+    parts = text.split(maxsplit=1)
+    return parts[0].rstrip(",.:;!?").lower() if parts else ""
+
+
+def _is_repetitive(text: str) -> bool:
+    """True if `text` starts with the same word as 2+ recent transcripts —
+    a signal that whisper is in a self-reinforcing loop. Skip the deque-add
+    so the bias doesn't compound."""
+    if not text or len(recent) < 2:
+        return False
+    first = _first_word(text)
+    if not first:
+        return False
+    matches = sum(1 for r in recent if _first_word(r) == first)
+    return matches >= 2
 
 
 def _on_audio(indata, frames, t, status):
@@ -225,7 +270,10 @@ def _finalize_and_send(s, chunks: list[np.ndarray]):
         print(f"{dt_whisper:.2f}s: {corrected!r}")
 
     if corrected:
-        recent.append(corrected)
+        if _is_repetitive(corrected):
+            print(f"skipping deque-add (repetitive first word): {corrected!r}", flush=True)
+        else:
+            recent.append(corrected)
         kb.type(corrected + " ")
 
 
@@ -250,5 +298,6 @@ if __name__ == "__main__":
     print("hold Option + Control to dictate")
     HEARTBEAT_FILE.touch()
     threading.Thread(target=_heartbeat_loop, daemon=True).start()
+    threading.Thread(target=_quartz_watchdog, daemon=True).start()
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
