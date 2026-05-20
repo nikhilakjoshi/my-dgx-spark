@@ -137,8 +137,13 @@ _max_record_timer: threading.Timer | None = None
 # seconds and force-stop if the modifier combo is no longer actually held.
 # Whichever detects the release first (pynput or this) wins the race.
 QUARTZ_POLL_INTERVAL = 0.2
+# Grace period after _start before the watchdog is allowed to fire. Avoids racing
+# with sd.InputStream.start() (which can block 100-300ms on macOS) and gives the
+# OS time to settle the modifier flag state after the press.
+QUARTZ_GRACE_SECONDS = 0.3
 _MOD_ALT_MASK = Quartz.kCGEventFlagMaskAlternate
 _MOD_CTRL_MASK = Quartz.kCGEventFlagMaskControl
+_record_started_at = 0.0
 
 
 def _modifiers_actually_held() -> bool:
@@ -149,7 +154,11 @@ def _modifiers_actually_held() -> bool:
 def _quartz_watchdog():
     while True:
         time.sleep(QUARTZ_POLL_INTERVAL)
-        if is_recording and not _modifiers_actually_held():
+        if not is_recording:
+            continue
+        if time.monotonic() - _record_started_at < QUARTZ_GRACE_SECONDS:
+            continue
+        if not _modifiers_actually_held():
             print("quartz: combo released; stopping", flush=True)
             held.clear()
             _stop_and_send()
@@ -190,17 +199,18 @@ def _on_audio(indata, frames, t, status):
 
 
 def _start():
-    global is_recording, audio_buf, stream, _max_record_timer
+    global is_recording, audio_buf, stream, _max_record_timer, _record_started_at
     if is_recording:
         return
     audio_buf = []
     is_recording = True
+    _record_started_at = time.monotonic()
+    print("rec...", flush=True)
     stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, callback=_on_audio)
     stream.start()
     _max_record_timer = threading.Timer(MAX_RECORD_SECONDS, _force_stop)
     _max_record_timer.daemon = True
     _max_record_timer.start()
-    print("rec...", flush=True)
 
 
 def _force_stop():
