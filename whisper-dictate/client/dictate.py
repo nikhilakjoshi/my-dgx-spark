@@ -198,6 +198,20 @@ def _on_audio(indata, frames, t, status):
         audio_buf.append(indata.copy())
 
 
+def _open_stream() -> sd.InputStream | None:
+    """Open the mic. Retries once after a short delay because AirPods / device
+    switching can briefly put the default input in an invalid state."""
+    for attempt in range(2):
+        try:
+            s = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, callback=_on_audio)
+            s.start()
+            return s
+        except Exception as e:
+            print(f"mic open err (attempt {attempt + 1}): {e}", flush=True)
+            time.sleep(0.2)
+    return None
+
+
 def _start():
     global is_recording, audio_buf, stream, _max_record_timer, _record_started_at
     if is_recording:
@@ -206,8 +220,12 @@ def _start():
     is_recording = True
     _record_started_at = time.monotonic()
     print("rec...", flush=True)
-    stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, callback=_on_audio)
-    stream.start()
+    s = _open_stream()
+    if s is None:
+        print("mic open failed after retry; aborting record", flush=True)
+        is_recording = False
+        return
+    stream = s
     _max_record_timer = threading.Timer(MAX_RECORD_SECONDS, _force_stop)
     _max_record_timer.daemon = True
     _max_record_timer.start()
