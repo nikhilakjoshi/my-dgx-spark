@@ -39,3 +39,4 @@ Components:
 - [`docs/future-prompt-biasing.md`](docs/future-prompt-biasing.md) — fix domain-term misspellings (Whisper, DGX Spark, etc.) via whisper.cpp's per-request `prompt` field. No second model. Cheapest win.
 - [`docs/future-llm-postprocess.md`](docs/future-llm-postprocess.md) — LLM-formatted dictation (markdown mode, cleanup, polish) with a second hotkey. Heavier.
 - [`docs/future-remote-access.md`](docs/future-remote-access.md) — off-WiFi dictation via Tailscale (primary) or Cloudflare Tunnel; plus multi-user auth/logging if I ever share my Spark.
+- [`docs/future-trtllm-converter.md`](docs/future-trtllm-converter.md) — TRT-LLM + NVFP4 conversion plan for PersonaPlex on Blackwell. Parked: 5-9 days work, uncertain real-time outcome on Spark due to bandwidth ceiling; revisit when production HW is final or NVIDIA ships a recipe.
