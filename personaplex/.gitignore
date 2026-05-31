@@ -1,0 +1,6 @@
+venv/
+personaplex/
+ssl/
+*.log
+*.pem
+__pycache__/
